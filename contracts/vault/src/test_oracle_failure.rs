@@ -134,6 +134,53 @@ fn test_trapping_oracle_returns_oracle_error() {
     assert_eq!(result, Err(Ok(VaultError::OracleError)));
 }
 
+mod fixed_oracle {
+    use super::*;
+
+    /// Oracle that reports a fixed price for every asset.
+    #[contract]
+    pub struct FixedOracle;
+
+    #[contractimpl]
+    impl FixedOracle {
+        pub fn set_price(env: Env, price: i128) {
+            env.storage()
+                .instance()
+                .set(&Symbol::new(&env, "price"), &price);
+        }
+
+        pub fn lastprice(env: Env, _asset: Address) -> Option<VaultPriceData> {
+            let price: i128 = env
+                .storage()
+                .instance()
+                .get(&Symbol::new(&env, "price"))
+                .unwrap_or(0);
+            Some(VaultPriceData {
+                price,
+                timestamp: env.ledger().sequence() as u64,
+            })
+        }
+    }
+}
+
+use fixed_oracle::{FixedOracle, FixedOracleClient};
+
+#[test]
+fn test_price_overflow_returns_oracle_error() {
+    let env = Env::default();
+    let (client, admin, token) = setup_vault(&env);
+    let oracle = env.register(FixedOracle, ());
+    FixedOracleClient::new(&env, &oracle).set_price(&i128::MAX);
+    configure_oracle(&client, &env, &admin, oracle);
+
+    let mut assets = Vec::new(&env);
+    assets.push_back(token);
+
+    // balance (1_000_000) * i128::MAX overflows i128.
+    let result = client.try_get_portfolio_valuation(&assets);
+    assert_eq!(result, Err(Ok(VaultError::OracleError)));
+}
+
 #[test]
 fn test_missing_price_returns_oracle_error() {
     let env = Env::default();

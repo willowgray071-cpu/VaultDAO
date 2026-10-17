@@ -8649,7 +8649,9 @@ impl VaultDAO {
         let price = Self::get_asset_price(env, asset)?;
         // Price is in USD scaled by 10^7, amount is in stroops (10^-7 units)
         // Result: (amount * price) / 10^7 = USD value in cents
-        Ok(amount.saturating_mul(price) / 10_000_000)
+        // Overflow is an error, not a silently clamped valuation.
+        let scaled = amount.checked_mul(price).ok_or(VaultError::OracleError)?;
+        Ok(scaled / 10_000_000)
     }
 
     /// Get the total USD valuation of the vault's holdings across multiple assets.
