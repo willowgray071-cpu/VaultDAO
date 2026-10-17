@@ -244,6 +244,8 @@ mod test_cross_vault;
 #[cfg(test)]
 mod test_disputes;
 #[cfg(test)]
+mod test_oracle_failure;
+#[cfg(test)]
 mod test_fees;
 #[cfg(test)]
 mod test_hooks;
@@ -8599,11 +8601,19 @@ impl VaultDAO {
 
         // Interface with standard Oracle contract
         // lastprice(asset: Address) -> Option<VaultPriceData>
-        let price_data: Option<VaultPriceData> = env.invoke_contract(
+        // Use `try_invoke_contract` so a trapping, paused, or incompatible oracle
+        // surfaces as `OracleError` instead of aborting the caller.
+        let price_data: Option<VaultPriceData> = match env.try_invoke_contract::<
+            Option<VaultPriceData>,
+            soroban_sdk::Error,
+        >(
             &oracle_cfg.address,
             &Symbol::new(env, "lastprice"),
             Vec::from_array(env, [asset.clone().into_val(env)]),
-        );
+        ) {
+            Ok(Ok(data)) => data,
+            _ => return Err(VaultError::OracleError),
+        };
 
         match price_data {
             Some(data) => {
@@ -8616,7 +8626,7 @@ impl VaultDAO {
                 }
                 Ok(data.price)
             }
-            None => Err(VaultError::InvalidAmount), // Price not found
+            None => Err(VaultError::OracleError), // Price not found
         }
     }
 

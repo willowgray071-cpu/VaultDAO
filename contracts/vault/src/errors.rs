@@ -358,6 +358,8 @@ pub enum VaultError {
     MaxDeadlineExtensionsReached = 47,
     OracleNotConfigured = 721,
     OraclePriceStale = 722,
+    /// Oracle call failed (trapped, returned an incompatible value) or had no price.
+    OracleError = 723,
 }
 
 // Compatibility markers for CI source checks:
